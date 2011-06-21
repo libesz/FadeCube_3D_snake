@@ -9,4 +9,8 @@ typedef struct {
    struct sockaddr_in cube_address;
 } handle_user_params_t;
 
+int mygetch( void );
+
+int handle_user( handle_user_params_t * );
+
 #endif // MAIN_H_INCLUDED

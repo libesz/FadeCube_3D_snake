@@ -4,28 +4,13 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "fadecube.h"
 #include "main.h"
 
 #define CUBE_IP   "192.168.1.99"
 #define CUBE_PORT 1125
-
-int handle_user( handle_user_params_t );
-
-int mygetch(void)
-{
-   struct termios oldt,
-   newt;
-   int ch;
-   tcgetattr( STDIN_FILENO, &oldt );
-   newt = oldt;
-   newt.c_lflag &= ~( ICANON | ECHO );
-   tcsetattr( STDIN_FILENO, TCSANOW, &newt );
-   ch = getchar();
-   tcsetattr( STDIN_FILENO, TCSANOW, &oldt );
-   return ch;
-}
 
 int main()
 {
@@ -37,6 +22,9 @@ int main()
    struct sockaddr_in cube_address;
    cube_frame_t cube_frame;
    handle_user_params_t handle_user_params;
+
+   int handle_user_thread_rc;
+   pthread_t handle_user_thread;
 
    memset( &cube_frame, 0, sizeof( cube_frame ) );
 
@@ -51,17 +39,24 @@ int main()
    handle_user_params.client_socket = client_socket;
    handle_user_params.cube_address = cube_address;
 
-   handle_user( handle_user_params );
+   if( handle_user_thread_rc = pthread_create( &handle_user_thread, NULL, &handle_user, (void *)&handle_user_params ) )
+   {
+      printf("Unable to create user handler thread, error: %d\n", handle_user_thread_rc );
+   }
+   else
+   {
+      pthread_join( handle_user_thread, NULL );
+   }
    return 0;
 }
 
-int handle_user( handle_user_params_t params )
+int handle_user( handle_user_params_t *params )
 {
    coord_t cube_coord;
    memset( &cube_coord, 0, sizeof( cube_coord ) );
 
-   set_led( params.cube_frame_ref, cube_coord, 3 );
-   send_frame_to_cube( params.client_socket, params.cube_address, params.cube_frame_ref );
+   set_led( params->cube_frame_ref, cube_coord, 3 );
+   send_frame_to_cube( params->client_socket, params->cube_address, params->cube_frame_ref );
 
    while( 1 )
    {
@@ -69,7 +64,7 @@ int handle_user( handle_user_params_t params )
       my_char = mygetch();
       printf( "%c ", my_char );
 
-      set_led( params.cube_frame_ref, cube_coord, 0 );
+      set_led( params->cube_frame_ref, cube_coord, 0 );
       switch( my_char )
       {
          case 27: return( 0 );
@@ -116,8 +111,22 @@ int handle_user( handle_user_params_t params )
                }
             break;
       }
-      set_led( params.cube_frame_ref, cube_coord, 3 );
-      if( something_happened ) send_frame_to_cube( params.client_socket, params.cube_address, params.cube_frame_ref );
+      set_led( params->cube_frame_ref, cube_coord, 3 );
+      if( something_happened ) send_frame_to_cube( params->client_socket, params->cube_address, params->cube_frame_ref );
    }
    return 1;
+}
+
+int mygetch(void)
+{
+   struct termios oldt,
+   newt;
+   int ch;
+   tcgetattr( STDIN_FILENO, &oldt );
+   newt = oldt;
+   newt.c_lflag &= ~( ICANON | ECHO );
+   tcsetattr( STDIN_FILENO, TCSANOW, &newt );
+   ch = getchar();
+   tcsetattr( STDIN_FILENO, TCSANOW, &oldt );
+   return ch;
 }
