@@ -6,11 +6,12 @@
 #include <unistd.h>
 
 #include "fadecube.h"
+#include "main.h"
 
 #define CUBE_IP   "192.168.1.99"
 #define CUBE_PORT 1125
 
-int handle_user( cube_frame_t *, int , struct sockaddr_in );
+int handle_user( handle_user_params_t );
 
 int mygetch(void)
 {
@@ -35,6 +36,7 @@ int main()
    int client_socket;
    struct sockaddr_in cube_address;
    cube_frame_t cube_frame;
+   handle_user_params_t handle_user_params;
 
    memset( &cube_frame, 0, sizeof( cube_frame ) );
 
@@ -44,18 +46,22 @@ int main()
    fill_frame( &cube_frame, 0 );
 
    puts( "Hello world!" );
-   handle_user( &cube_frame, client_socket, cube_address );
+
+   handle_user_params.cube_frame_ref = &cube_frame;
+   handle_user_params.client_socket = client_socket;
+   handle_user_params.cube_address = cube_address;
+
+   handle_user( handle_user_params );
    return 0;
 }
 
-
-int handle_user( cube_frame_t *cube_frame_ref, int client_socket, struct sockaddr_in cube_address )
+int handle_user( handle_user_params_t params )
 {
    coord_t cube_coord;
    memset( &cube_coord, 0, sizeof( cube_coord ) );
 
-   set_led( cube_frame_ref, cube_coord, 3 );
-   send_frame_to_cube( client_socket, cube_address, cube_frame_ref );
+   set_led( params.cube_frame_ref, cube_coord, 3 );
+   send_frame_to_cube( params.client_socket, params.cube_address, params.cube_frame_ref );
 
    while( 1 )
    {
@@ -63,7 +69,7 @@ int handle_user( cube_frame_t *cube_frame_ref, int client_socket, struct sockadd
       my_char = mygetch();
       printf( "%c ", my_char );
 
-      set_led( cube_frame_ref, cube_coord, 0 );
+      set_led( params.cube_frame_ref, cube_coord, 0 );
       switch( my_char )
       {
          case 27: return( 0 );
@@ -110,8 +116,8 @@ int handle_user( cube_frame_t *cube_frame_ref, int client_socket, struct sockadd
                }
             break;
       }
-      set_led( cube_frame_ref, cube_coord, 3 );
-      if( something_happened ) send_frame_to_cube( client_socket, cube_address, cube_frame_ref );
+      set_led( params.cube_frame_ref, cube_coord, 3 );
+      if( something_happened ) send_frame_to_cube( params.client_socket, params.cube_address, params.cube_frame_ref );
    }
    return 1;
 }

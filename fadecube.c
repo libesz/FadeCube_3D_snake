@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "fadecube.h"
+#include "main.h"
 
 int create_udp_socket()
 {
