@@ -8,6 +8,7 @@
 
 #include "fadecube.h"
 #include "main.h"
+#include "snake.h"
 
 #define CUBE_IP   "192.168.1.99"
 #define CUBE_PORT 1125
@@ -30,7 +31,7 @@ int main()
    cube_frame_t cube_frame;
    handle_user_params_t handle_user_params;
    handle_snake_params_t handle_snake_params;
-   char direction = FORWARD;
+   char user_direction = FORWARD;
 
    int handle_user_thread_rc;
    pthread_t handle_user_thread;
@@ -46,15 +47,12 @@ int main()
 
    puts( "Hello world!" );
 
-   handle_user_params.cube_frame_ref = &cube_frame;
-   handle_user_params.client_socket = client_socket;
-   handle_user_params.cube_address = cube_address;
-   handle_user_params.current_direction = &direction;
+   handle_user_params.user_direction = &user_direction;
 
    handle_snake_params.cube_frame_ref = &cube_frame;
    handle_snake_params.client_socket = client_socket;
    handle_snake_params.cube_address = cube_address;
-   handle_snake_params.current_direction = &direction;
+   handle_snake_params.user_direction = &user_direction;
 
    if( handle_snake_thread_rc = pthread_create( &handle_snake_thread, NULL, &handle_snake, (void *)&handle_snake_params ) )
    {
@@ -79,79 +77,105 @@ int main()
 
 int handle_snake( handle_snake_params_t *params )
 {
-   coord_t cube_coord;
+   coord_t next_coord;
    char something_happened = 0;
-   char last_direction = *params->current_direction;
-   char used_direction = *params->current_direction;
+   char last_direction = *params->user_direction;
+   char used_direction = *params->user_direction;
+   unsigned char snake_length = 10, snake_actual_length = 0;
 
-   memset( &cube_coord, 0, sizeof( cube_coord ) );
+   snake_node_t *snake_head = NULL;
+   snake_node_t *temp_snake_node;
+
+   memset( &next_coord, 0, sizeof( next_coord ) );
 
    while(1)
    {
       something_happened = 0;
-      set_led( params->cube_frame_ref, cube_coord, 0 );
-      if( ( ( last_direction == FORWARD ) && ( *params->current_direction == BACKWARD ) ) ||
-          ( ( last_direction == BACKWARD ) && ( *params->current_direction == FORWARD ) ) ||
-          ( ( last_direction == LEFT ) && ( *params->current_direction == RIGHT ) ) ||
-          ( ( last_direction == RIGHT ) && ( *params->current_direction == LEFT ) ) ||
-          ( ( last_direction == UP ) && ( *params->current_direction == DOWN ) ) ||
-          ( ( last_direction == DOWN ) && ( *params->current_direction == UP ) ) )
+      //set_led( params->cube_frame_ref, next_coord, 0 );
+      if( ( ( last_direction == FORWARD ) && ( *params->user_direction == BACKWARD ) ) ||
+          ( ( last_direction == BACKWARD ) && ( *params->user_direction == FORWARD ) ) ||
+          ( ( last_direction == LEFT ) && ( *params->user_direction == RIGHT ) ) ||
+          ( ( last_direction == RIGHT ) && ( *params->user_direction == LEFT ) ) ||
+          ( ( last_direction == UP ) && ( *params->user_direction == DOWN ) ) ||
+          ( ( last_direction == DOWN ) && ( *params->user_direction == UP ) ) )
       {
          used_direction = last_direction;
       }
       else
       {
-         used_direction = *params->current_direction;
+         used_direction = *params->user_direction;
          last_direction = used_direction;
       }
+//      if( something_happened )
+
       switch( used_direction )
       {
          case FORWARD:
-               if( cube_coord.y < 9 )
+               if( next_coord.y < 9 )
                {
-                  cube_coord.y++;
+                  next_coord.y++;
                   something_happened = 1;
                }
             break;
          case BACKWARD:
-               if( cube_coord.y )
+               if( next_coord.y )
                {
-                  cube_coord.y--;
+                  next_coord.y--;
                   something_happened = 1;
                }
             break;
          case LEFT:
-               if( cube_coord.x < 9 )
+               if( next_coord.x < 9 )
                {
-                  cube_coord.x++;
+                  next_coord.x++;
                   something_happened = 1;
                }
             break;
          case RIGHT:
-               if( cube_coord.x )
+               if( next_coord.x )
                {
-                  cube_coord.x--;
+                  next_coord.x--;
                   something_happened = 1;
                }
             break;
          case UP:
-               if( cube_coord.z < 9 )
+               if( next_coord.z < 9 )
                {
-                  cube_coord.z++;
+                  next_coord.z++;
                   something_happened = 1;
                }
             break;
          case DOWN:
-               if( cube_coord.z )
+               if( next_coord.z )
                {
-                  cube_coord.z--;
+                  next_coord.z--;
                   something_happened = 1;
                }
             break;
       }
-      set_led( params->cube_frame_ref, cube_coord, 3 );
-      if( something_happened )send_frame_to_cube( params->client_socket, params->cube_address, params->cube_frame_ref );
-      usleep(200000);
+
+      if( something_happened )
+      {
+         snake_add( &snake_head, next_coord );
+         snake_actual_length = snake_count( snake_head );
+         if( ( snake_actual_length > snake_length ) && snake_actual_length )
+         {
+            snake_remove_last( &snake_head );
+         }
+#ifdef DEBUG
+         snake_print( snake_head );
+#endif
+         fill_frame( params->cube_frame_ref, 0 );
+
+         temp_snake_node = snake_head;
+         while( temp_snake_node )
+         {
+            set_led( params->cube_frame_ref, temp_snake_node->data, 3 );
+            temp_snake_node = temp_snake_node->next;
+         }
+      }
+      send_frame_to_cube( params->client_socket, params->cube_address, params->cube_frame_ref );
+      usleep( 200000 );
    }
    return 1;
 }
@@ -162,28 +186,29 @@ int handle_user( handle_user_params_t *params )
    {
       char my_char, something_happened = 0;
       my_char = mygetch();
+#ifdef DEBUG
       printf( "%c ", my_char );
-
+#endif
       switch( my_char )
       {
          case 27: return( 0 );
          case 'w':
-               *params->current_direction = FORWARD;
+               *params->user_direction = FORWARD;
             break;
          case 's':
-               *params->current_direction = BACKWARD;
+               *params->user_direction = BACKWARD;
             break;
          case 'a':
-               *params->current_direction = LEFT;
+               *params->user_direction = LEFT;
             break;
          case 'd':
-               *params->current_direction = RIGHT;
+               *params->user_direction = RIGHT;
             break;
          case '\'':
-               *params->current_direction = UP;
+               *params->user_direction = UP;
             break;
          case '/':
-               *params->current_direction = DOWN;
+               *params->user_direction = DOWN;
             break;
       }
    }
