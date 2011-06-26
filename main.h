@@ -3,32 +3,32 @@
 
 #include <netinet/in.h>
 #include "fadecube.h"
+#include "snake.h"
 
 typedef struct {
    char *user_direction;
 } handle_user_params_t;
 
-int handle_user( handle_user_params_t * );
+void *handle_user( handle_user_params_t * );
 
 typedef struct {
-   cube_frame_t *cube_frame_ref;
-   int client_socket;
-   struct sockaddr_in cube_address;
    char *user_direction;
-   struct snake_node_t **snake_head;
+   snake_node_t **snake_head;
+   pthread_mutex_t *draw_mutex;
+   pthread_cond_t  *draw_condition_var;
 } handle_snake_params_t;
 
-int handle_snake( handle_snake_params_t * );
+void *handle_snake( handle_snake_params_t * );
 
 typedef struct {
-   cube_frame_t *cube_frame_ref;
    int client_socket;
    struct sockaddr_in cube_address;
-   char *user_direction;
-   struct snake_node_t **snake_head;
+   snake_node_t **snake_head;
+   pthread_mutex_t *draw_mutex;
+   pthread_cond_t  *draw_condition_var;
 } handle_render_params_t;
 
-int handle_render( handle_render_params_t * );
+void *handle_render( handle_render_params_t * );
 
 int mygetch( void );
 

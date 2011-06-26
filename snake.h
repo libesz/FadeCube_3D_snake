@@ -3,13 +3,13 @@
 
 #include "fadecube.h"
 
-typedef struct ns
+typedef struct snake_node
 {
-   struct coord data;
-   struct ns *next;
+   coord_t data;
+   struct snake_node *next;
 } snake_node_t;
 
-snake_node_t *snake_add( snake_node_t **, coord_t );
+void *snake_add( snake_node_t **, coord_t );
 
 void snake_remove_last( snake_node_t ** );
 

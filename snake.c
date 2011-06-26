@@ -1,13 +1,12 @@
 #include "snake.h"
 #include <stdlib.h>
 
-snake_node_t *snake_add( snake_node_t ** old_head, coord_t data )
+void *snake_add( snake_node_t ** head, coord_t data )
 {
    snake_node_t *new_head = malloc( sizeof(*new_head) );
-   new_head->next = *old_head;
-   *old_head = new_head;
+   new_head->next = *head;
    new_head->data = data;
-   return new_head;
+   *head = new_head;
 }
 
 void snake_remove_last( snake_node_t ** head )

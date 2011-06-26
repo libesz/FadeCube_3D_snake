@@ -24,8 +24,10 @@ int main()
 {
    int client_socket;
    struct sockaddr_in cube_address;
-   cube_frame_t cube_frame;
    char user_direction = FORWARD;
+
+   pthread_mutex_t draw_mutex         = PTHREAD_MUTEX_INITIALIZER;
+   pthread_cond_t  draw_condition_var = PTHREAD_COND_INITIALIZER;
 
    int handle_user_thread_rc;
    pthread_t handle_user_thread;
@@ -36,7 +38,7 @@ int main()
    handle_snake_params_t handle_snake_params;
 
    int handle_render_thread_rc;
-   pthread_t handle_handle_thread;
+   pthread_t handle_render_thread;
    handle_render_params_t handle_render_params;
 
 #ifdef DEBUG
@@ -44,29 +46,35 @@ int main()
 #endif
    puts( "Hello world!" );
 
-   memset( &cube_frame, 0, sizeof( cube_frame ) );
    snake_node_t *snake_head = NULL;
 
    client_socket = create_udp_socket();
    cube_address = create_sockaddr( CUBE_IP, CUBE_PORT );
 
-   fill_frame( &cube_frame, 0 );
-
-
    handle_user_params.user_direction = &user_direction;
 
-   handle_snake_params.cube_frame_ref = &cube_frame;
-   handle_snake_params.client_socket = client_socket;
-   handle_snake_params.cube_address = cube_address;
    handle_snake_params.user_direction = &user_direction;
    handle_snake_params.snake_head = &snake_head;
+   handle_snake_params.draw_mutex = &draw_mutex;
+   handle_snake_params.draw_condition_var = &draw_condition_var;
 
-   if( handle_snake_thread_rc = pthread_create( &handle_snake_thread, NULL, &handle_snake, (void *)&handle_snake_params ) )
+   handle_render_params.client_socket = client_socket;
+   handle_render_params.cube_address = cube_address;
+   handle_render_params.snake_head = &snake_head;
+   handle_render_params.draw_mutex = &draw_mutex;
+   handle_render_params.draw_condition_var = &draw_condition_var;
+
+   if( ( handle_render_thread_rc = pthread_create( &handle_render_thread, NULL, (void *)handle_render, &handle_render_params ) ) )
+   {
+      printf("Unable to create render handler thread, error: %d\n", handle_render_thread_rc );
+   }
+
+   if( ( handle_snake_thread_rc = pthread_create( &handle_snake_thread, NULL, (void *)handle_snake, &handle_snake_params ) ) )
    {
       printf("Unable to create snake handler thread, error: %d\n", handle_snake_thread_rc );
    }
 
-   if( handle_user_thread_rc = pthread_create( &handle_user_thread, NULL, &handle_user, (void *)&handle_user_params ) )
+   if( ( handle_user_thread_rc = pthread_create( &handle_user_thread, NULL, (void *)handle_user, &handle_user_params ) ) )
    {
       printf("Unable to create user handler thread, error: %d\n", handle_user_thread_rc );
    }
@@ -78,39 +86,66 @@ int main()
    return 0;
 }
 
-int handle_snake( handle_snake_params_t *params )
+//render thread function, always blocked while something happened which modifies the cube data
+void *handle_render( handle_render_params_t *params )
+{
+   cube_frame_t cube_frame;
+   snake_node_t *temp_snake_node;
+
+   memset( &cube_frame, 0, sizeof( cube_frame ) );
+
+   fill_frame( &cube_frame, 0 );
+   send_frame_to_cube( params->client_socket, params->cube_address, &cube_frame ); //draw an empty frame
+
+   while( 1 )
+   {
+      pthread_mutex_lock( params->draw_mutex ); //lock the draw mutex
+
+      pthread_cond_wait( params->draw_condition_var, params->draw_mutex ); //unlock the mutex until there is something to draw
+
+      fill_frame( &cube_frame, 0 ); //start the rendering
+
+      temp_snake_node = *params->snake_head; //render the snake START
+      while( temp_snake_node )
+      {
+         set_led( &cube_frame, temp_snake_node->data, 3 );
+         temp_snake_node = temp_snake_node->next;
+      } //render the snake END
+
+      pthread_mutex_unlock( params->draw_mutex ); //release the mutex
+      send_frame_to_cube( params->client_socket, params->cube_address, &cube_frame );
+   }
+}
+
+//snake handler, calculates the snake parts in a chained list
+void *handle_snake( handle_snake_params_t *params )
 {
    coord_t next_coord;
-   char something_happened = 0;
+   char something_happened = 0; //currenctly the snake stops at the wall, when this happens, this var indicates it
    char last_direction = *params->user_direction;
    char used_direction = *params->user_direction;
    unsigned char snake_length = 10, snake_actual_length = 0;
 
-   snake_node_t *temp_snake_node;
 
    memset( &next_coord, 0, sizeof( next_coord ) );
 
    while(1)
    {
       something_happened = 0;
-      //set_led( params->cube_frame_ref, next_coord, 0 );
-      if( ( ( last_direction == FORWARD ) && ( *params->user_direction == BACKWARD ) ) ||
-          ( ( last_direction == BACKWARD ) && ( *params->user_direction == FORWARD ) ) ||
-          ( ( last_direction == LEFT ) && ( *params->user_direction == RIGHT ) ) ||
-          ( ( last_direction == RIGHT ) && ( *params->user_direction == LEFT ) ) ||
-          ( ( last_direction == UP ) && ( *params->user_direction == DOWN ) ) ||
-          ( ( last_direction == DOWN ) && ( *params->user_direction == UP ) ) )
-      {
-         used_direction = last_direction;
-      }
-      else
+
+      //deny the direction update if the user pressed the opposite
+      if( !( ( ( last_direction == FORWARD ) && ( *params->user_direction == BACKWARD ) ) ||
+             ( ( last_direction == BACKWARD ) && ( *params->user_direction == FORWARD ) ) ||
+             ( ( last_direction == LEFT ) && ( *params->user_direction == RIGHT ) ) ||
+             ( ( last_direction == RIGHT ) && ( *params->user_direction == LEFT ) ) ||
+             ( ( last_direction == UP ) && ( *params->user_direction == DOWN ) ) ||
+             ( ( last_direction == DOWN ) && ( *params->user_direction == UP ) ) ) )
       {
          used_direction = *params->user_direction;
          last_direction = used_direction;
       }
-//      if( something_happened )
 
-      switch( used_direction )
+      switch( used_direction ) //calculate the next (from the last added) HEAD item coordinate for the snake
       {
          case FORWARD:
                if( next_coord.y < 9 )
@@ -156,37 +191,31 @@ int handle_snake( handle_snake_params_t *params )
             break;
       }
 
-      if( something_happened )
+      if( something_happened ) //so this var indicates when there is a place to move forward
       {
+         pthread_mutex_lock( params->draw_mutex ); //lock the mutex while updating the snake (avoid render thread to read now)
          snake_add( params->snake_head, next_coord );
          snake_actual_length = snake_count( *params->snake_head );
-         if( ( snake_actual_length > snake_length ) && snake_actual_length )
-         {
+         if( ( snake_actual_length > snake_length ) && snake_actual_length ) //if the snake was not currently growing, remove the last item
+         {                                                                   //therefore it will look like moving
             snake_remove_last( params->snake_head );
          }
 #ifdef DEBUG
          snake_print( *params->snake_head );
 #endif
-         fill_frame( params->cube_frame_ref, 0 );
-
-         temp_snake_node = *params->snake_head;
-         while( temp_snake_node )
-         {
-            set_led( params->cube_frame_ref, temp_snake_node->data, 3 );
-            temp_snake_node = temp_snake_node->next;
-         }
+         pthread_cond_signal( params->draw_condition_var ); //call render thread that there is something new to draw
+         pthread_mutex_unlock( params->draw_mutex );
       }
-      send_frame_to_cube( params->client_socket, params->cube_address, params->cube_frame_ref );
-      usleep( 200000 );
+      usleep( 200000 ); //sleep the snake thread, this represents the speed
    }
-   return 1;
 }
 
-int handle_user( handle_user_params_t *params )
+//user thread, it does nothing but always waits for a keyboard press
+void *handle_user( handle_user_params_t *params )
 {
    while( 1 )
    {
-      char my_char, something_happened = 0;
+      char my_char;
       my_char = mygetch();
 #ifdef DEBUG
       printf( "%c ", my_char );
@@ -214,9 +243,9 @@ int handle_user( handle_user_params_t *params )
             break;
       }
    }
-   return 1;
 }
 
+//the magic function, does the same as getch should
 int mygetch(void)
 {
    struct termios oldt,
