@@ -22,30 +22,36 @@
 
 int main()
 {
-#ifdef DEBUG
-   puts( "DEBUG --- debug mode on" );
-#endif
-
    int client_socket;
    struct sockaddr_in cube_address;
    cube_frame_t cube_frame;
-   handle_user_params_t handle_user_params;
-   handle_snake_params_t handle_snake_params;
    char user_direction = FORWARD;
 
    int handle_user_thread_rc;
    pthread_t handle_user_thread;
+   handle_user_params_t handle_user_params;
+
    int handle_snake_thread_rc;
    pthread_t handle_snake_thread;
+   handle_snake_params_t handle_snake_params;
+
+   int handle_render_thread_rc;
+   pthread_t handle_handle_thread;
+   handle_render_params_t handle_render_params;
+
+#ifdef DEBUG
+   puts( "DEBUG --- debug mode on" );
+#endif
+   puts( "Hello world!" );
 
    memset( &cube_frame, 0, sizeof( cube_frame ) );
+   snake_node_t *snake_head = NULL;
 
    client_socket = create_udp_socket();
    cube_address = create_sockaddr( CUBE_IP, CUBE_PORT );
 
    fill_frame( &cube_frame, 0 );
 
-   puts( "Hello world!" );
 
    handle_user_params.user_direction = &user_direction;
 
@@ -53,15 +59,12 @@ int main()
    handle_snake_params.client_socket = client_socket;
    handle_snake_params.cube_address = cube_address;
    handle_snake_params.user_direction = &user_direction;
+   handle_snake_params.snake_head = &snake_head;
 
    if( handle_snake_thread_rc = pthread_create( &handle_snake_thread, NULL, &handle_snake, (void *)&handle_snake_params ) )
    {
       printf("Unable to create snake handler thread, error: %d\n", handle_snake_thread_rc );
    }
-   /*else
-   {
-      pthread_join( handle_snake_thread, NULL );
-   }*/
 
    if( handle_user_thread_rc = pthread_create( &handle_user_thread, NULL, &handle_user, (void *)&handle_user_params ) )
    {
@@ -83,7 +86,6 @@ int handle_snake( handle_snake_params_t *params )
    char used_direction = *params->user_direction;
    unsigned char snake_length = 10, snake_actual_length = 0;
 
-   snake_node_t *snake_head = NULL;
    snake_node_t *temp_snake_node;
 
    memset( &next_coord, 0, sizeof( next_coord ) );
@@ -156,18 +158,18 @@ int handle_snake( handle_snake_params_t *params )
 
       if( something_happened )
       {
-         snake_add( &snake_head, next_coord );
-         snake_actual_length = snake_count( snake_head );
+         snake_add( params->snake_head, next_coord );
+         snake_actual_length = snake_count( *params->snake_head );
          if( ( snake_actual_length > snake_length ) && snake_actual_length )
          {
-            snake_remove_last( &snake_head );
+            snake_remove_last( params->snake_head );
          }
 #ifdef DEBUG
-         snake_print( snake_head );
+         snake_print( *params->snake_head );
 #endif
          fill_frame( params->cube_frame_ref, 0 );
 
-         temp_snake_node = snake_head;
+         temp_snake_node = *params->snake_head;
          while( temp_snake_node )
          {
             set_led( params->cube_frame_ref, temp_snake_node->data, 3 );

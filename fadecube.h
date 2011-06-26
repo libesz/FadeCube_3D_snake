@@ -1,13 +1,13 @@
 #ifndef FADECUBE_H_INCLUDED
 #define FADECUBE_H_INCLUDED
 
-typedef struct {
+typedef struct coord {
     char x;
     char y;
     char z;
 } coord_t;
 
-typedef struct {
+typedef struct cube_frame {
     unsigned char leds[250];
 } cube_frame_t;
 

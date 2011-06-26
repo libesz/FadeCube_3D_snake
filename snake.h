@@ -5,11 +5,11 @@
 
 typedef struct ns
 {
-   struct coord_t data;
+   struct coord data;
    struct ns *next;
 } snake_node_t;
 
-snake_node_t *snake_add( snake_node_t **, struct coord_t );
+snake_node_t *snake_add( snake_node_t **, coord_t );
 
 void snake_remove_last( snake_node_t ** );
 

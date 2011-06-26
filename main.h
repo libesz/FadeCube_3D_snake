@@ -15,9 +15,20 @@ typedef struct {
    int client_socket;
    struct sockaddr_in cube_address;
    char *user_direction;
+   struct snake_node_t **snake_head;
 } handle_snake_params_t;
 
 int handle_snake( handle_snake_params_t * );
+
+typedef struct {
+   cube_frame_t *cube_frame_ref;
+   int client_socket;
+   struct sockaddr_in cube_address;
+   char *user_direction;
+   struct snake_node_t **snake_head;
+} handle_render_params_t;
+
+int handle_render( handle_render_params_t * );
 
 int mygetch( void );
 

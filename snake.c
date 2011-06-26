@@ -1,7 +1,7 @@
 #include "snake.h"
 #include <stdlib.h>
 
-snake_node_t *snake_add( snake_node_t ** old_head, struct coord_t data )
+snake_node_t *snake_add( snake_node_t ** old_head, coord_t data )
 {
    snake_node_t *new_head = malloc( sizeof(*new_head) );
    new_head->next = *old_head;
