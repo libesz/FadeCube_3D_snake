@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
-	<ActiveTarget name="Debug" />
+	<ActiveTarget name="Release" />
 	<File name="fadecube.c" open="1" top="0" tabpos="5">
 		<Cursor position="1857" topLine="9" />
 	</File>
 	<File name="fadecube.h" open="1" top="0" tabpos="6">
-		<Cursor position="157" topLine="0" />
+		<Cursor position="203" topLine="0" />
 	</File>
 	<File name="main.c" open="1" top="1" tabpos="1">
-		<Cursor position="1708" topLine="118" />
+		<Cursor position="9033" topLine="220" />
 	</File>
 	<File name="main.h" open="1" top="0" tabpos="2">
-		<Cursor position="597" topLine="0" />
+		<Cursor position="676" topLine="0" />
 	</File>
 	<File name="snake.c" open="1" top="0" tabpos="3">
-		<Cursor position="960" topLine="0" />
+		<Cursor position="392" topLine="0" />
 	</File>
 	<File name="snake.h" open="1" top="0" tabpos="4">
-		<Cursor position="198" topLine="0" />
+		<Cursor position="319" topLine="0" />
 	</File>
 </CodeBlocks_layout_file>

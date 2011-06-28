@@ -1,5 +1,6 @@
 #include "snake.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 void *snake_add( snake_node_t ** head, coord_t data )
 {
@@ -31,6 +32,16 @@ int snake_count( snake_node_t * head )
       head = head->next;
    }
    return i;
+}
+
+void make_food( coord_t *food )
+{
+   unsigned int iseed = (unsigned int)time(NULL);
+   srand (iseed);
+
+   food->x = rand() % 10;
+   food->y = rand() % 10;
+   food->z = rand() % 10;
 }
 
 #ifdef DEBUG

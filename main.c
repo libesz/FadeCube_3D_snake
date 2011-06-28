@@ -5,6 +5,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
+#include <string.h>
 
 #include "fadecube.h"
 #include "main.h"
@@ -20,69 +22,98 @@
 #define FORWARD  4
 #define BACKWARD 5
 
+#define FOODTIMEOUT 30
+#define MOVE_TIME   200
+
 int main()
 {
-   int client_socket;
-   struct sockaddr_in cube_address;
-   char user_direction = FORWARD;
-
-   pthread_mutex_t draw_mutex         = PTHREAD_MUTEX_INITIALIZER;
-   pthread_cond_t  draw_condition_var = PTHREAD_COND_INITIALIZER;
-
-   int handle_user_thread_rc;
-   pthread_t handle_user_thread;
-   handle_user_params_t handle_user_params;
-
-   int handle_snake_thread_rc;
-   pthread_t handle_snake_thread;
-   handle_snake_params_t handle_snake_params;
-
-   int handle_render_thread_rc;
-   pthread_t handle_render_thread;
-   handle_render_params_t handle_render_params;
-
+   unsigned char gameover = 0;
 #ifdef DEBUG
    puts( "DEBUG --- debug mode on" );
 #endif
    puts( "Hello world!" );
 
-   snake_node_t *snake_head = NULL;
-
-   client_socket = create_udp_socket();
-   cube_address = create_sockaddr( CUBE_IP, CUBE_PORT );
-
-   handle_user_params.user_direction = &user_direction;
-
-   handle_snake_params.user_direction = &user_direction;
-   handle_snake_params.snake_head = &snake_head;
-   handle_snake_params.draw_mutex = &draw_mutex;
-   handle_snake_params.draw_condition_var = &draw_condition_var;
-
-   handle_render_params.client_socket = client_socket;
-   handle_render_params.cube_address = cube_address;
-   handle_render_params.snake_head = &snake_head;
-   handle_render_params.draw_mutex = &draw_mutex;
-   handle_render_params.draw_condition_var = &draw_condition_var;
-
-   if( ( handle_render_thread_rc = pthread_create( &handle_render_thread, NULL, (void *)handle_render, &handle_render_params ) ) )
+   do
    {
-      printf("Unable to create render handler thread, error: %d\n", handle_render_thread_rc );
-   }
+      int client_socket;
+      struct sockaddr_in cube_address;
+      char user_direction = FORWARD;
+      coord_t food;
+      snake_node_t *snake_head = NULL;
 
-   if( ( handle_snake_thread_rc = pthread_create( &handle_snake_thread, NULL, (void *)handle_snake, &handle_snake_params ) ) )
-   {
-      printf("Unable to create snake handler thread, error: %d\n", handle_snake_thread_rc );
-   }
+      pthread_mutex_t gameover_mutex         = PTHREAD_MUTEX_INITIALIZER;
+      pthread_cond_t  gameover_condition_var = PTHREAD_COND_INITIALIZER;
 
-   if( ( handle_user_thread_rc = pthread_create( &handle_user_thread, NULL, (void *)handle_user, &handle_user_params ) ) )
-   {
-      printf("Unable to create user handler thread, error: %d\n", handle_user_thread_rc );
-   }
-   else
-   {
+      pthread_mutex_t draw_mutex         = PTHREAD_MUTEX_INITIALIZER;
+      pthread_cond_t  draw_condition_var = PTHREAD_COND_INITIALIZER;
+
+      int handle_user_thread_rc;
+      pthread_t handle_user_thread;
+      handle_user_params_t handle_user_params;
+
+      int handle_snake_thread_rc;
+      pthread_t handle_snake_thread;
+      handle_snake_params_t handle_snake_params;
+
+      int handle_render_thread_rc;
+      pthread_t handle_render_thread;
+      handle_render_params_t handle_render_params;
+
+      client_socket = create_udp_socket();
+      cube_address = create_sockaddr( CUBE_IP, CUBE_PORT );
+
+      handle_user_params.user_direction = &user_direction;
+      handle_user_params.gameover = &gameover;
+
+      handle_snake_params.user_direction = &user_direction;
+      handle_snake_params.snake_head = &snake_head;
+      handle_snake_params.food = &food;
+      handle_snake_params.gameover = &gameover;
+      handle_snake_params.draw_mutex = &draw_mutex;
+      handle_snake_params.draw_condition_var = &draw_condition_var;
+
+      handle_render_params.client_socket = client_socket;
+      handle_render_params.cube_address = cube_address;
+      handle_render_params.snake_head = &snake_head;
+      handle_render_params.food = &food;
+      handle_render_params.gameover = &gameover;
+      handle_render_params.draw_mutex = &draw_mutex;
+      handle_render_params.draw_condition_var = &draw_condition_var;
+
+      gameover = 0;
+#ifdef DEBUG
+      printf("thread 1, %d\n", gameover);
+#endif
+      if( ( handle_render_thread_rc = pthread_create( &handle_render_thread, NULL, (void *)handle_render, &handle_render_params ) ) )
+      {
+         printf("Unable to create render handler thread, error: %d\n", handle_render_thread_rc );
+      }
+
+      if( ( handle_snake_thread_rc = pthread_create( &handle_snake_thread, NULL, (void *)handle_snake, &handle_snake_params ) ) )
+      {
+         printf("Unable to create snake handler thread, error: %d\n", handle_snake_thread_rc );
+      }
+
+      if( ( handle_user_thread_rc = pthread_create( &handle_user_thread, NULL, (void *)handle_user, &handle_user_params ) ) )
+      {
+         printf("Unable to create user handler thread, error: %d\n", handle_user_thread_rc );
+      }
+#ifdef DEBUG
+      printf("thread 2, %d\n", gameover);
+#endif
+      pthread_join( handle_snake_thread, NULL );
+#ifdef DEBUG
+      printf("thread 3, %d\n", gameover);
+#endif
+      pthread_join( handle_render_thread, NULL );
+#ifdef DEBUG
+      printf("thread 4, %d\n", gameover);
+#endif
       pthread_join( handle_user_thread, NULL );
-   }
-
+#ifdef DEBUG
+      printf("thread 5, %d\n", gameover);
+#endif
+   } while( gameover != 2 );
    return 0;
 }
 
@@ -103,15 +134,25 @@ void *handle_render( handle_render_params_t *params )
 
       pthread_cond_wait( params->draw_condition_var, params->draw_mutex ); //unlock the mutex until there is something to draw
 
+      if( *params->gameover )
+      {
+         pthread_mutex_unlock( params->draw_mutex ); //release the mutex
+         return NULL;
+      }
+
       fill_frame( &cube_frame, 0 ); //start the rendering
 
-      temp_snake_node = *params->snake_head; //render the snake START
-      while( temp_snake_node )
+      if( params->snake_head )
       {
-         set_led( &cube_frame, temp_snake_node->data, 3 );
-         temp_snake_node = temp_snake_node->next;
-      } //render the snake END
+         temp_snake_node = *params->snake_head; //render the snake START
+         while( temp_snake_node )
+         {
+            set_led( &cube_frame, temp_snake_node->data, 3 );
+            temp_snake_node = temp_snake_node->next;
+         } //render the snake END
 
+         set_led( &cube_frame, *params->food, 3 ); //render the food
+      }
       pthread_mutex_unlock( params->draw_mutex ); //release the mutex
       send_frame_to_cube( params->client_socket, params->cube_address, &cube_frame );
    }
@@ -121,17 +162,17 @@ void *handle_render( handle_render_params_t *params )
 void *handle_snake( handle_snake_params_t *params )
 {
    coord_t next_coord;
-   char something_happened = 0; //currenctly the snake stops at the wall, when this happens, this var indicates it
+   char can_move = 0; //currenctly the snake stops at the wall, when this happens, this var indicates it
    char last_direction = *params->user_direction;
    char used_direction = *params->user_direction;
    unsigned char snake_length = 10, snake_actual_length = 0;
-
+   unsigned char food_timer = 0;
 
    memset( &next_coord, 0, sizeof( next_coord ) );
 
    while(1)
    {
-      something_happened = 0;
+      can_move = 0;
 
       //deny the direction update if the user pressed the opposite
       if( !( ( ( last_direction == FORWARD ) && ( *params->user_direction == BACKWARD ) ) ||
@@ -151,50 +192,69 @@ void *handle_snake( handle_snake_params_t *params )
                if( next_coord.y < 9 )
                {
                   next_coord.y++;
-                  something_happened = 1;
+                  can_move = 1;
                }
             break;
          case BACKWARD:
                if( next_coord.y )
                {
                   next_coord.y--;
-                  something_happened = 1;
+                  can_move = 1;
                }
             break;
          case LEFT:
                if( next_coord.x < 9 )
                {
                   next_coord.x++;
-                  something_happened = 1;
+                  can_move = 1;
                }
             break;
          case RIGHT:
                if( next_coord.x )
                {
                   next_coord.x--;
-                  something_happened = 1;
+                  can_move = 1;
                }
             break;
          case UP:
                if( next_coord.z < 9 )
                {
                   next_coord.z++;
-                  something_happened = 1;
+                  can_move = 1;
                }
             break;
          case DOWN:
                if( next_coord.z )
                {
                   next_coord.z--;
-                  something_happened = 1;
+                  can_move = 1;
                }
             break;
       }
 
-      if( something_happened ) //so this var indicates when there is a place to move forward
+      pthread_mutex_lock( params->draw_mutex ); //lock the mutex while updating the snake (avoid render thread to read now)
+      if( can_move ) //so this var indicates when there is a place to move forward
       {
-         pthread_mutex_lock( params->draw_mutex ); //lock the mutex while updating the snake (avoid render thread to read now)
+         if( !( food_timer ) )
+         {
+#ifdef DEBUG
+            puts( "new food\n" );
+#endif
+            make_food( params->food );
+         }
+         if( ++food_timer == FOODTIMEOUT ) food_timer = 0;
+
          snake_add( params->snake_head, next_coord );
+
+         if( !( memcmp( &((**params->snake_head).data), params->food, sizeof( coord_t ) ) ) ) //detect if the snake has just hit the food
+         {
+            snake_length++;
+            food_timer = 0;
+#ifdef DEBUG
+            puts( "got it!\n" );
+#endif
+         }
+
          snake_actual_length = snake_count( *params->snake_head );
          if( ( snake_actual_length > snake_length ) && snake_actual_length ) //if the snake was not currently growing, remove the last item
          {                                                                   //therefore it will look like moving
@@ -206,7 +266,29 @@ void *handle_snake( handle_snake_params_t *params )
          pthread_cond_signal( params->draw_condition_var ); //call render thread that there is something new to draw
          pthread_mutex_unlock( params->draw_mutex );
       }
-      usleep( 200000 ); //sleep the snake thread, this represents the speed
+      else
+      {
+         while( (**params->snake_head).next )
+         {
+            snake_remove_last( params->snake_head );
+#ifdef DEBUG
+            //printf( "a" );
+#endif
+         }
+         free( *params->snake_head );
+         *params->gameover = 1;
+         puts( "Game over!\nPress ESC to quit or any to start new game!" );
+         pthread_cond_signal( params->draw_condition_var ); //call render thread that there is something new to draw
+         pthread_mutex_unlock( params->draw_mutex );
+         return NULL;
+      }
+
+      if( *params->gameover )
+      {
+         return NULL;
+      }
+
+      usleep( MOVE_TIME * 1000 ); //sleep the snake thread, this represents the speed
    }
 }
 
@@ -218,11 +300,20 @@ void *handle_user( handle_user_params_t *params )
       char my_char;
       my_char = mygetch();
 #ifdef DEBUG
-      printf( "%c ", my_char );
+      printf( "%d ", my_char );
 #endif
+      if( my_char == 27 )
+      {
+         *params->gameover = 2;
+         return NULL;
+      }
+      if( *params->gameover )
+      {
+         return NULL;
+      }
+
       switch( my_char )
       {
-         case 27: return( 0 );
          case 'w':
                *params->user_direction = FORWARD;
             break;

@@ -15,6 +15,8 @@ void snake_remove_last( snake_node_t ** );
 
 int snake_count( snake_node_t * );
 
+void make_food( coord_t * );
+
 #ifdef DEBUG
 void snake_print( snake_node_t * );
 #endif
