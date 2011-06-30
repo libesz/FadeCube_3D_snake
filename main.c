@@ -24,6 +24,7 @@
 
 #define FOODTIMEOUT 30
 #define MOVE_TIME   200
+#define SNAKE_INIT_LENGTH 9
 
 int main()
 {
@@ -165,10 +166,12 @@ void *handle_snake( handle_snake_params_t *params )
    char can_move = 0; //currenctly the snake stops at the wall, when this happens, this var indicates it
    char last_direction = *params->user_direction;
    char used_direction = *params->user_direction;
-   unsigned char snake_length = 10, snake_actual_length = 0;
+   unsigned char snake_length = SNAKE_INIT_LENGTH, snake_actual_length = 0;
    unsigned char food_timer = 0;
 
    memset( &next_coord, 0, sizeof( next_coord ) );
+
+   puts( "Game started");
 
    while(1)
    {
@@ -277,7 +280,8 @@ void *handle_snake( handle_snake_params_t *params )
          }
          free( *params->snake_head );
          *params->gameover = 1;
-         puts( "Game over!\nPress ESC to quit or any to start new game!" );
+         printf( "Game over!\nYour score is %d.\n\nPress ESC to quit or any to start new game!\n", ( snake_actual_length - SNAKE_INIT_LENGTH ) * 10 );
+         fflush(stdout);
          pthread_cond_signal( params->draw_condition_var ); //call render thread that there is something new to draw
          pthread_mutex_unlock( params->draw_mutex );
          return NULL;
