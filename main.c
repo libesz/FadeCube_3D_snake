@@ -42,9 +42,6 @@ int main()
       coord_t food;
       snake_node_t *snake_head = NULL;
 
-      pthread_mutex_t gameover_mutex         = PTHREAD_MUTEX_INITIALIZER;
-      pthread_cond_t  gameover_condition_var = PTHREAD_COND_INITIALIZER;
-
       pthread_mutex_t draw_mutex         = PTHREAD_MUTEX_INITIALIZER;
       pthread_cond_t  draw_condition_var = PTHREAD_COND_INITIALIZER;
 
@@ -168,6 +165,7 @@ void *handle_snake( handle_snake_params_t *params )
    char used_direction = *params->user_direction;
    unsigned char snake_length = SNAKE_INIT_LENGTH, snake_actual_length = 0;
    unsigned char food_timer = 0;
+   unsigned int score = 0;
 
    memset( &next_coord, 0, sizeof( next_coord ) );
 
@@ -236,9 +234,27 @@ void *handle_snake( handle_snake_params_t *params )
       }
 
       pthread_mutex_lock( params->draw_mutex ); //lock the mutex while updating the snake (avoid render thread to read now)
-      if( can_move ) //so this var indicates when there is a place to move forward
+
+      if( can_move ) //now this var indicates when there is a place to move forward
       {
-         if( !( food_timer ) )
+         snake_node_t *temp_node;
+         snake_add( params->snake_head, next_coord );
+
+         temp_node = ( **params->snake_head ).next;
+         while( temp_node ) //check trough the snake
+         {
+            if( !( memcmp( &((**params->snake_head).data), &((*temp_node).data), sizeof( coord_t ) ) ) ) //if the head reached a part of the body
+            {
+               can_move = 0;
+               puts( "You catched your tail!" );
+            }
+            temp_node = temp_node->next;
+         }
+      }
+
+      if( can_move ) //now this var indicates when there is no crash between the snake head and the body
+      {
+         if( !( food_timer ) ) //time to put down another food
          {
 #ifdef DEBUG
             puts( "new food\n" );
@@ -247,12 +263,12 @@ void *handle_snake( handle_snake_params_t *params )
          }
          if( ++food_timer == FOODTIMEOUT ) food_timer = 0;
 
-         snake_add( params->snake_head, next_coord );
 
          if( !( memcmp( &((**params->snake_head).data), params->food, sizeof( coord_t ) ) ) ) //detect if the snake has just hit the food
          {
             snake_length++;
             food_timer = 0;
+            score += 10;
 #ifdef DEBUG
             puts( "got it!\n" );
 #endif
@@ -280,7 +296,7 @@ void *handle_snake( handle_snake_params_t *params )
          }
          free( *params->snake_head );
          *params->gameover = 1;
-         printf( "Game over!\nYour score is %d.\n\nPress ESC to quit or any to start new game!\n", ( snake_actual_length - SNAKE_INIT_LENGTH ) * 10 );
+         printf( "Game over!\nYour score is %d.\n\nPress ESC to quit or any to start new game!\n", score );
          fflush(stdout);
          pthread_cond_signal( params->draw_condition_var ); //call render thread that there is something new to draw
          pthread_mutex_unlock( params->draw_mutex );
