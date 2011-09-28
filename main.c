@@ -296,7 +296,7 @@ void *handle_snake( handle_snake_params_t *params )
          }
          free( *params->snake_head );
          *params->gameover = 1;
-         printf( "Game over!\nYour score is %d.\n\nPress ESC to quit or any to start new game!\n", score );
+         printf( "Game over!\nYour score is %d.\n\nPress ESC to quit or ENTER to start new game!\n", score );
          fflush(stdout);
          pthread_cond_signal( params->draw_condition_var ); //call render thread that there is something new to draw
          pthread_mutex_unlock( params->draw_mutex );
@@ -329,9 +329,8 @@ void *handle_user( handle_user_params_t *params )
       }
       if( *params->gameover )
       {
-         return NULL;
+         if( my_char == 10 ) return NULL; /* ENTER */
       }
-
       switch( my_char )
       {
          case 'w':
