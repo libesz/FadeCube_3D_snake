@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __MINGW32__
+#include <winsock2.h>
+#else
 #include <netinet/in.h>
+#endif // __MINGW32__
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
@@ -10,7 +14,7 @@
 #include "fadecube.h"
 #include "main.h"
 
-#define CUBE_IP   "192.168.1.100"
+#define CUBE_IP   "192.168.1.99"
 #define CUBE_PORT 1125
 
 #define GROW_INTERVAL 0.1
@@ -25,12 +29,16 @@ int main()
 #ifdef DEBUG
    puts( "DEBUG --- debug mode on" );
 #endif
+#ifdef __MINGW32__
+  WSADATA WSAData;
+  WSAStartup(MAKEWORD(2,0), &WSAData);
+#endif // __MINGW32__
    puts( "Hello world!" );
 
    int client_socket;
    struct sockaddr_in cube_address;
 
-   unsigned int usecs = 30000;
+   unsigned int usecs = 10000;
 
    unsigned char grow_dir = 1;
 
@@ -84,7 +92,9 @@ int main()
       send_frame_to_cube( client_socket, cube_address, &cube_frame );
       usleep(usecs);
    }
-
+#ifdef __MINGW32__
+  WSACleanup();
+#endif // __MINGW32__
    return 0;
 }
 

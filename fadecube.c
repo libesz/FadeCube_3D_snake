@@ -1,8 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __MINGW32__
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif // __MINGW32__
 #include <string.h>
 
 #include "fadecube.h"
